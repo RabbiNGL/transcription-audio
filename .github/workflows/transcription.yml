@@ -2,7 +2,6 @@
 # « transcription » est transcrit, le texte est écrit dans sortie/ puis poussé.
 # Chaque fichier est transcrit par un job séparé, en parallèle (matrice) : un long
 # débat est déposé découpé en morceaux (nom__000.mp3, nom__001.mp3...) pour aller vite.
-# Branche isolée : elle ne partage aucun historique avec main et n'en touche rien.
 # N'exige aucun secret : utilise le GITHUB_TOKEN fourni automatiquement.
 name: transcription
 

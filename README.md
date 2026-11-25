@@ -1,7 +1,6 @@
 # Transcription audio
 
-Dépôt temporaire. Sert à transcrire les débats
-enregistrés par Rabbi (dossier Synology `Document/Religion`).
+Dépôt temporaire de transcription audio (Whisper, français).
 
 ## Fonctionnement
 

@@ -8,4 +8,5 @@ fichiers = [
     f.name for f in sorted(Path("entree").iterdir())
     if f.suffix.lower() in EXTENSIONS and not (Path("sortie") / f"{f.stem}.txt").exists()
 ]
-print("fichiers=" + json.dumps(fichiers))
+# Une matrice GitHub Actions est limitée à 256 jobs : le reste passe au run suivant.
+print("fichiers=" + json.dumps(fichiers[:250]))

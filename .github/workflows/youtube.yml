@@ -1,0 +1,69 @@
+# Récupère le son des vidéos YouTube listées dans youtube/liens.txt (une URL par ligne),
+# le découpe en morceaux de 5 min dans entree/ (nom yt-<id>__NNN.mp3) puis pousse.
+# Le workflow « transcription » se lance ensuite (déclencheur workflow_run).
+# Si YouTube refuse le téléchargement, essaie les sous-titres automatiques en français.
+name: youtube
+
+on:
+  push:
+    branches: ["main"]
+    paths: ["youtube/liens.txt"]
+  workflow_dispatch:
+
+concurrency:
+  group: youtube
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  recuperer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Outils
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg > /dev/null
+          pip install --quiet -U yt-dlp
+      - name: Télécharger
+        run: |
+          touch youtube/faits.txt
+          while read -r url; do
+            [ -z "$url" ] && continue
+            id=$(yt-dlp --get-id "$url" 2>/dev/null | head -1)
+            [ -z "$id" ] && { echo "ECHEC id : $url" | tee -a youtube/journal.txt; continue; }
+            grep -qx "$id" youtube/faits.txt && continue
+            titre=$(yt-dlp --get-title "$url" 2>/dev/null | head -1)
+            if yt-dlp -q -f bestaudio -x --audio-format mp3 -o "/tmp/$id.%(ext)s" "$url"; then
+              ffmpeg -nostdin -loglevel error -y -i "/tmp/$id.mp3" -vn -ac 1 -ar 16000 -b:a 32k -f segment -segment_time 300 "entree/yt-${id}__%03d.mp3"
+              echo "yt-$id" >> complets.txt
+              echo "OK audio : yt-$id : $titre : $url" | tee -a youtube/journal.txt
+              echo "$id" >> youtube/faits.txt
+            elif yt-dlp -q --skip-download --write-auto-subs --sub-langs "fr.*,fr" --sub-format vtt -o "/tmp/$id" "$url"; then
+              f=$(ls /tmp/$id*.vtt | head -1)
+              python3 - "$f" "sortie/yt-$id.txt" <<'EOF'
+          import re, sys
+          lignes, vu = [], set()
+          for l in open(sys.argv[1], encoding="utf-8"):
+              l = re.sub(r"<[^>]+>", "", l).strip()
+              if not l or "-->" in l or l.startswith(("WEBVTT", "Kind:", "Language:")) or l in vu:
+                  continue
+              vu.add(l); lignes.append(l)
+          open(sys.argv[2], "w", encoding="utf-8").write(" ".join(lignes) + "\n")
+          EOF
+              echo "OK sous-titres : yt-$id : $titre : $url" | tee -a youtube/journal.txt
+              echo "$id" >> youtube/faits.txt
+            else
+              echo "ECHEC : $url" | tee -a youtube/journal.txt
+            fi
+          done < youtube/liens.txt
+      - name: Pousser
+        run: |
+          git config user.name "transcription-bot"
+          git config user.email "transcription-bot@users.noreply.github.com"
+          git add -A entree sortie youtube complets.txt
+          git diff --cached --quiet && exit 0
+          git commit -q -m "YouTube : récupération"
+          for i in 1 2 3 4 5; do git pull -q --rebase origin main && git push -q && exit 0; sleep 10; done

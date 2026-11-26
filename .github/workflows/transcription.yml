@@ -9,6 +9,9 @@ on:
   push:
     branches: ["main"]
     paths: ["entree/**"]
+  workflow_run:
+    workflows: ["youtube"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       modele:

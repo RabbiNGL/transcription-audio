@@ -25,6 +25,7 @@ concurrency:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   lister:
@@ -81,3 +82,21 @@ jobs:
             sleep $((RANDOM % 10 + 3))
           done
           exit 1
+
+  # S'il reste des fichiers (plus de 250 en attente), relancer le workflow.
+  relancer:
+    needs: [lister, transcrire]
+    if: always() && needs.lister.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Relancer s'il en reste
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git pull -q origin main
+          reste=$(python outils/a_faire.py | sed 's/^fichiers=//' | python -c "import json,sys; print(len(json.load(sys.stdin)))")
+          echo "restants : $reste"
+          if [ "$reste" -gt 0 ]; then gh workflow run transcription.yml --ref main; fi
